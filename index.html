@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Crypt Unending — Sprite Atlas Build</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<style>
+  :root{
+    --bg:#0b0b0e; --floor:#15161b; --wall:#1b1d23; --gold:#ffd26a;
+  }
+  *{ -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; touch-action:manipulation; }
+  html,body{margin:0;height:100%;background:var(--bg);color:#eee;font-family:ui-rounded,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+  #cv{position:fixed; inset:0; width:100dvw; height:100dvh; image-rendering:pixelated; background:var(--bg); touch-action:none}
+
+  /* HUD */
+  #hud{position:fixed; inset:0; pointer-events:none}
+  .bar{height:10px;width:200px;background:#0d0e13;border:1px solid #2b2b33;border-radius:6px;position:absolute}
+  .fill{position:absolute;inset:0;width:100%}
+  #hpT{left:10px;top:8px;font-weight:900}
+  #hpB{left:80px;top:8px}.hpF{background:linear-gradient(180deg,#c23,#821b25)}
+  #enB{left:80px;top:26px}.enF{background:linear-gradient(180deg,#58c0ff,#2a6fa3)}
+  #huB{left:80px;top:44px}.huF{background:linear-gradient(180deg,#79c36a,#3f7a35)}
+  #roomT{position:absolute;right:12px;top:8px;font-weight:900;color:#cfd2e6}
+  #coinsT{position:absolute;right:12px;top:28px;color:var(--gold);font-weight:900}
+  #msg{position:fixed;left:50%;top:10px;transform:translateX(-50%);background:#111a;border:1px solid #2a2a33;border-radius:10px;padding:.35rem .7rem;display:none}
+  #panel{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center}
+  .card{background:linear-gradient(180deg,#15151a,#0f0f14);border:1px solid #2a2a33;border-radius:14px;padding:16px;max-width:640px;color:#ddd}
+  .choices{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.6rem}
+  .choice{pointer-events:auto;padding:.5rem .7rem;border:1px solid #3a3a45;border-radius:10px;background:#141418;cursor:pointer}
+  #invGrid{display:grid;grid-template-columns:repeat(5,44px);gap:6px;margin-top:.6rem}
+  .slot{width:44px;height:44px;background:#0d0d12;border:1px solid #2b2b33;border-radius:8px;display:flex;align-items:center;justify-content:center}
+
+  /* Buttons */
+  .pad{position:absolute;pointer-events:auto}
+  .btn{width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid #3a3a45;color:#e8e8f0;display:flex;align-items:center;justify-content:center;font-size:26px}
+  #btnDash{right:12px;bottom:168px}
+  #btnRanged{right:12px;bottom:92px}
+  #btnMelee{right:12px;bottom:16px}
+  #btnInteract{right:92px;bottom:132px}
+  #btnInv{right:92px;bottom:56px}
+
+  /* D‑Pad (left) */
+  #dpad{left:16px;bottom:16px;width:192px;height:192px;pointer-events:none;position:absolute}
+  .dkey{position:absolute;pointer-events:auto}
+  #up{left:64px;top:0}
+  #down{left:64px;bottom:0}
+  #left{left:0;top:64px}
+  #right{right:0;top:64px}
+</style>
+</head>
+<body>
+<canvas id="cv" width="352" height="198"></canvas>
+
+<div id="hud">
+  <div id="hpT">♥ <span id="hpVal">10</span>/10</div>
+  <div id="hpB" class="bar"><div id="hpF" class="fill hpF"></div></div>
+  <div id="enB" class="bar"><div id="enF" class="fill enF"></div></div>
+  <div id="huB" class="bar"><div id="huF" class="fill huF"></div></div>
+  <div id="roomT">Room 1</div>
+  <div id="coinsT">🪙 0</div>
+</div>
+
+<div id="msg"></div>
+<div id="panel"><div class="card" id="panelC"></div></div>
+
+<!-- D‑pad & buttons -->
+<button id="btnDash" class="pad btn" aria-label="Dash">💨</button>
+<button id="btnRanged" class="pad btn" aria-label="Ranged">🏹</button>
+<button id="btnMelee" class="pad btn" aria-label="Melee">🗡️</button>
+<button id="btnInteract" class="pad btn" aria-label="Interact">✋</button>
+<button id="btnInv" class="pad btn" aria-label="Inventory">🎒</button>
+<div id="dpad">
+  <button id="up" class="btn dkey">▲</button>
+  <button id="down" class="btn dkey">▼</button>
+  <button id="left" class="btn dkey">◀</button>
+  <button id="right" class="btn dkey">▶</button>
+</div>
+
+<script>
+/* =========================
+   Core helpers / canvas
+========================= */
+const cv=document.getElementById('cv'), cx=cv.getContext('2d');
+const rand=(a,b)=>Math.random()*(b-a)+a, rint=(a,b)=>Math.floor(rand(a,b+1)), clamp=(v,a,b)=>v<a?a:(v>b?b:v), chance=p=>Math.random()<p;
+let W=cv.width,H=cv.height,SCALE=3;
+function fit(){const vw=innerWidth,vh=innerHeight;SCALE=Math.max(1,Math.floor(Math.min(vw/W,vh/H)));cv.style.width=W*SCALE+'px';cv.style.height=H*SCALE+'px';}
+addEventListener('resize',fit); addEventListener('orientationchange',fit); fit();
+
+/* =========================
+   Simple sfx
+========================= */
+const SFX=(()=>{const C=new (window.AudioContext||window.webkitAudioContext)();let ok=false;
+async function start(){if(C.state!=='running'){try{await C.resume();}catch{}}ok=true;}
+function blip(f=500,d=0.07,v=0.2,t='square'){if(!ok)return;const o=C.createOscillator(),g=C.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(C.destination);const n=C.currentTime;o.start(n);g.gain.exponentialRampToValueAtTime(0.0001,n+d);o.stop(n+d+0.02);}
+return{start,hit:()=>blip(520,0.06,0.22,'square'),combo:()=>blip(760,0.12,0.28,'square'),dash:()=>blip(140,0.1,0.25,'sine'),hurt:()=>blip(160,0.12,0.3,'triangle'),pick:()=>blip(880,0.07,0.22,'square'),coin:()=>blip(740,0.06,0.22,'square'),heal:()=>blip(900,0.1,0.25,'sine'),orb:()=>blip(420,0.09,0.18,'sine')};})();
+
+/* =========================
+   Game state & constants
+========================= */
+const TILE=16,RW=24,RH=16;
+const T={FLOOR:0,WALL:1,TORCH:2,POOL:3,DRIP:4,DOOR:5,CHEST:6,LEVER:7,SECRETD:8,ANVIL:9,TRADER:10};
+const EN={SKEL:'skel',GOB:'gob',MAGE:'mage'};
+const IT={FOOD:'food',SWORD:'sword',XBOW:'xbow',POT:'pot',SHIELD:'shield',RELIC:'relic'};
+let room=1, map=[], ents=[], coins=0;
+
+/* player */
+const player={x:RW/2,y:RH/2,spd:3,base:3,hp:10,hpMax:10,energy:100,energyMax:100,hunger:10,hungerMax:10,face:[1,0],dashCd:0,melee:false,meleeDur:0,ranged:false,rangedDur:0,inv:[],walk:false,slashT:0,comboT:0,auraT:0};
+function equipSword(d=60){player.melee=true;player.meleeDur=d;}
+function equipBow(d=40){player.ranged=true;player.rangedDur=d;}
+
+/* HUD refs */
+const hpVal=document.getElementById('hpVal'), hpF=document.getElementById('hpF'), enF=document.getElementById('enF'), huF=document.getElementById('huF');
+const roomT=document.getElementById('roomT'), coinsT=document.getElementById('coinsT');
+const msg=document.getElementById('msg'); let msgTo=0; function toast(t,ms=1200){ msg.textContent=t; msg.style.display='block'; clearTimeout(msgTo); msgTo=setTimeout(()=>msg.style.display='none',ms); }
+
+/* =========================
+   Controls (D‑pad + buttons)
+========================= */
+const held={up:false,down:false,left:false,right:false};
+function hold(id,flag){const el=document.getElementById(id); el.addEventListener('touchstart',e=>{e.preventDefault();held[flag]=true;},{passive:false}); el.addEventListener('touchend',e=>{e.preventDefault();held[flag]=false;},{passive:false}); el.addEventListener('touchcancel',()=>{held[flag]=false;});}
+hold('up','up'); hold('down','down'); hold('left','left'); hold('right','right');
+
+document.getElementById('btnDash').addEventListener('touchstart',e=>{e.preventDefault();doDash();},{passive:false});
+document.getElementById('btnMelee').addEventListener('touchstart',e=>{e.preventDefault();melee();},{passive:false});
+document.getElementById('btnRanged').addEventListener('touchstart',e=>{e.preventDefault();ranged();},{passive:false});
+document.getElementById('btnInteract').addEventListener('touchstart',e=>{e.preventDefault();interact();},{passive:false});
+document.getElementById('btnInv').addEventListener('touchstart',e=>{e.preventDefault();openInventory();},{passive:false});
+
+/* prevent double‑tap zoom */
+let lastTap=0; document.addEventListener('touchend',e=>{const n=Date.now(); if(n-lastTap<300) e.preventDefault(); lastTap=n;},{passive:false});
+
+/* =========================
+   SPRITE ATLAS (embedded)
+========================= */
+/* We draw a tiny pixel-art atlas on an offscreen canvas.
+   If a file named sprites.png exists next to index.html, we auto-load it instead. */
+const atlas={img:null,map:{}}; // map: name -> {x,y,w,h}
+function A(name,x,y,w,h){ atlas.map[name]={x,y,w,h}; }
+function makeAtlas(){
+  const ac=document.createElement('canvas'); ac.width=256; ac.height=256; const ax=ac.getContext('2d'); ax.imageSmoothingEnabled=false;
+  // helper
+  const px=(c,x,y,w=1,h=1)=>{ax.fillStyle=c;ax.fillRect(x,y,w,h);};
+  // 16x16 tiles
+  // floor cobble
+  A('tile_floor',0,0,16,16);
+  px("#14151a",0,0,16,16); px("#1a1c22",1,1,6,6); px("#1a1c22",9,2,5,5); px("#1a1c22",3,9,5,5); px("#0f1116",7,7,2,2); px("#0f1116",12,12,1,1);
+  // wall brick
+  A('tile_wall',16,0,16,16);
+  px("#1b1d23",16,0,16,16); px("#2a2d37",16,0,16,3); px("#0c0d11",16,13,16,3); px("#23252e",24,0,1,16); px("#23252e",16,8,16,1);
+  // torch base
+  A('tile_torch',32,0,16,16);
+  px("#14151a",32,0,16,16); px("#3a2a12",38,6,4,9);
+  // torch flame frames
+  A('torch_f1',48,0,8,6); px("#ffbd6a",48,2,4,3); px("#ff9e42",52,1,4,5);
+  A('torch_f2',56,0,8,6); px("#ff9e42",56,2,4,3); px("#ffbd6a",60,1,4,5);
+  // door
+  A('tile_door',64,0,16,16);
+  px("#231a12",64,0,16,16); px("#6a4525",68,2,8,12);
+  // pool
+  A('tile_pool',80,0,16,16);
+  px("#14151a",80,0,16,16); px("#0b2a44",82,3,12,11); px("#17507a",83,6,10,6); px("#9fe6ff",88,9,2,1);
+  // drip
+  A('tile_drip',96,0,16,16);
+  px("#14151a",96,0,16,16); px("#1a2533",105,2,2,12);
+  // chest
+  A('tile_chest',112,0,16,16);
+  px("#3b2a17",114,6,12,8); px("#6d4a23",114,3,12,4); px("#caa45b",119,4,2,9); px("#caa45b",118,10,4,2);
+  // lever
+  A('tile_lever',128,0,16,16);
+  px("#3f3f46",135,6,2,8); px("#caa45b",132,5,8,2);
+  // anvil
+  A('tile_anvil',144,0,16,16);
+  px("#2b2d36",147,9,10,5); px("#4a4c58",146,6,12,3);
+  // trader
+  A('tile_trader',160,0,16,16);
+  px("#0f2b17",160,0,16,16); px("#caa45b",165,7,6,6);
+
+  // PLAYER 16x20 (two walk frames)
+  A('pl_idle',0,32,16,20);
+  px("#3b2f28",2,32+14,12,3); px("#2a2f3b",2,32+9,12,5); px("#4b3a2a",1,32+3,14,8); px("#6a4a32",1,32+3,14,2);
+  px("#caa45b",3,32+12,10,2); px("#ffe1c7",4,32-2,8,8); px("#907a62",4,32-2,8,2);
+  A('pl_walk',16,32,16,20);
+  px("#2c231d",18,32+16,12,2); px("#3b2f28",18,32+14,12,3); px("#2a2f3b",18,32+9,12,5); px("#4b3a2a",17,32+3,14,8); px("#6a4a32",17,32+3,14,2);
+  px("#caa45b",19,32+12,10,2); px("#ffe1c7",20,32-2,8,8); px("#907a62",20,32-2,8,2);
+  // slash & combo aura
+  A('pl_slash',32,32,8,14); px("#cfe0ff",32,32,8,14);
+  A('pl_combo',40,32,18,18); px("rgba(255,239,154,1)",40,32,18,18);
+
+  // ENEMIES 16x18
+  // skeleton
+  A('skel_a',0,64,16,18);
+  px("#a8a59b",2,64+14,12,3); px("#e0dccf",7,64+9,2,9);
+  px("#e0dccf",2,64+13,12,1); px("#e0dccf",2,64+11,12,1); px("#e0dccf",2,64+15,12,1);
+  px("#e0dccf",1,64+7,2,8); px("#e0dccf",13,64+7,2,8); px("#b0b0b8",14,64+10,2,6);
+  px("#e0dccf",4,64+2,8,6); px("#555",6,64+3,2,2); px("#555",9,64+3,2,2);
+  A('skel_b',16,64,16,18); ax.drawImage(ac,0,64,16,18,16,64,16,18); // cheap duplicate frame
+
+  // goblin
+  A('gob_a',32,64,16,18);
+  px("#1c2614",34,64+2,12,8); px("#79c36a",35,64+5,10,9); px("#cfcfcf",46,64+10,2,4); px("#3b2f28",35,64+14,10,3);
+  A('gob_b',48,64,16,18); ax.drawImage(ac,32,64,16,18,48,64,16,18);
+
+  // mage
+  A('mag_a',64,64,16,18);
+  px("#2b2233",66,64+2,12,12); px("#43304f",66,64+2,12,2); px("#f2dec9",68,64-2,8,6);
+  px("#b98cff",65,64+9,3,3); px("#b98cff",76,64+9,3,3);
+  A('mag_b',80,64,16,18); ax.drawImage(ac,64,64,16,18,80,64,16,18);
+
+  // projectile orb 6x6
+  A('orb',0,92,6,6); px("#a9c2ff",0,92,6,6); px("#dff0ff",2,94,2,2);
+
+  // coin/loot 6x6
+  A('loot',8,92,6,6); px("#ffd26a",8,92,6,6);
+
+  atlas.img=ac;
+}
+
+function loadExternalAtlas(then){
+  const img=new Image(); img.onload=()=>{atlas.img=img; then();}; img.onerror=then; img.src='sprites.png';
+}
+
+/* draw sprite by name at world-pixel (already camera offset) */
+function spr(name,dx,dy,alpha=1){
+  const s=atlas.map[name]; if(!s) return;
+  if(alpha!==1){ cx.globalAlpha=alpha; }
+  cx.drawImage(atlas.img,s.x,s.y,s.w,s.h, dx|0, dy|0, s.w, s.h);
+  if(alpha!==1){ cx.globalAlpha=1; }
+}
+
+/* =========================
+   Generation
+========================= */
+function regen(){
+  map=Array.from({length:RH},()=>Array(RW).fill(T.FLOOR));
+  for(let y=0;y<RH;y++)for(let x=0;x<RW;x++) if(x===0||y===0||x===RW-1||y===RH-1) map[y][x]=T.WALL;
+  for(let i=0;i<rint(24,42);i++){ const x=rint(2,RW-3),y=rint(2,RH-3); map[y][x]=Math.random()<.72?T.WALL:T.DRIP; }
+  for(let i=0;i<rint(4,7);i++){ const s=rint(0,3); let x=1,y=1; if(s===0){x=rint(3,RW-4);y=1}else if(s===1){x=rint(3,RW-4);y=RH-2}else if(s===2){x=1;y=rint(3,RH-4)}else{x=RW-2;y=rint(3,RH-4)} map[y][x]=T.TORCH; }
+
+  const s=rint(0,3); if(s===0) map[0][rint(4,RW-5)]=T.DOOR; else if(s===1) map[RH-1][rint(4,RW-5)]=T.DOOR; else if(s===2) map[rint(4,RH-5)][0]=T.DOOR; else map[rint(4,RH-5)][RW-1]=T.DOOR;
+
+  if(room%10===0){ map[rint(3,RH-4)][rint(3,RW-4)]=T.POOL; map[rint(4,RH-5)][rint(4,RW-5)]=T.ANVIL; } else if(chance(.25)) map[rint(3,RH-4)][rint(3,RW-4)]=T.POOL;
+  if(chance(.35)){ const sx=rint(3,RW-4),sy=rint(3,RH-4); map[sy][sx]=T.SECRETD; const lx=Math.max(2,Math.min(RW-3,sx+rint(-3,3))), ly=Math.max(2,Math.min(RH-3,sy+rint(-3,3))); map[ly][lx]=T.LEVER; }
+  if(chance(.4)) map[rint(3,RH-4)][rint(3,RW-4)]=T.CHEST;
+  if(chance(.10)) map[rint(3,RH-4)][rint(3,RW-4)]=T.TRADER;
+
+  // ambient enemies
+  ents.length=0; const depth=Math.min(1,(room-1)/150), n=rint(1,2+Math.round(depth*4));
+  for(let i=0;i<n;i++) spawnEnemy(pickEnemy(depth));
+
+  player.x=RW/2; player.y=RH/2; player.walk=false;
+}
+function pickEnemy(d){ const bag=[[EN.SKEL,0.45-0.2*d],[EN.GOB,0.35+0.1*d],[EN.MAGE,0.2+0.1*d]]; let s=bag.reduce((a,b)=>a+b[1],0), r=Math.random()*s; for(const [k,w] of bag){ if((r-=w)<=0) return k; } return EN.SKEL; }
+function spawnEnemy(kind){ const e={kind,enemy:true,x:rint(2,RW-3),y:rint(2,RH-3),hp:1,spd:.55,cd:0,hitT:0,anim:0,shootCd:1200}; if(kind===EN.SKEL){e.hp=3;e.spd=.6;e.dmg=1;} if(kind===EN.GOB){e.hp=2;e.spd=.85;e.dmg=1.5;e.dashCd=0;} if(kind===EN.MAGE){e.hp=3;e.spd=.55;e.dmg=1;e.ranged=true;} ents.push(e); }
+function tileAt(x,y){ if(y<0||y>=RH||x<0||x>=RW) return T.WALL; return map[y][x]; }
+function walkable(tx,ty){ const t=tileAt(tx,ty); return t!==T.WALL && t!==T.SECRETD; }
+
+/* =========================
+   Inventory / panels
+========================= */
+const panel=document.getElementById('panel'), panelC=document.getElementById('panelC');
+function openPanel(html,choices){ panelC.innerHTML=html+(choices?`<div class="choices">${choices.map(c=>`<button class="choice">${c.label}</button>`).join('')}</div>`:''); panel.style.display='flex'; if(choices){ panelC.querySelectorAll('.choice').forEach((b,i)=>b.onclick=()=>{panel.style.display='none';choices[i].on();}); } else panel.onclick=()=>panel.style.display='none'; }
+const ITICON=w=>w==='food'?'🍗':w==='sword'?'🗡️':w==='xbow'?'🏹':w==='pot'?'🧪':w==='shield'?'🛡️':w==='relic'?'✨':'•';
+function giveItem(what,opt={}){ player.inv.push({what,...opt}); toast(`Got ${what}`); SFX.pick(); }
+function openInventory(){ const grid=player.inv.map(it=>`<div class="slot">${ITICON(it.what)}</div>`).join(''); openPanel(`<h3>Inventory</h3><div id="invGrid">${grid}</div><p>Tap a slot to use/equip.</p>`); panelC.querySelectorAll('.slot').forEach((n,i)=>n.onclick=()=>{ useItem(i); panel.style.display='none'; }); }
+function useItem(i){ const it=player.inv[i]; if(!it) return; if(it.what==='food'){ player.hunger=player.hungerMax; SFX.heal(); } if(it.what==='sword'){ equipSword(60); } if(it.what==='xbow'){ equipBow(40); } if(it.what==='shield'){ player.shield=(player.shield||0)+3; } if(it.what==='pot'){ const r=rint(0,4); if(r===0){ player.spd=player.base+1.2; player.auraT=2000; setTimeout(()=>player.spd=player.base,20000);} if(r===1){ player.hp=Math.min(player.hpMax,player.hp+3);} if(r===2){ player.energy=player.energyMax;} if(r===3){ player.hunger=player.hungerMax;} if(r===4){ player.melee&&(player.meleeDur+=12);} } if(it.what==='relic'){ player.melee=true; player.meleeDur=999999; player.ranged=true; player.rangedDur=999999; } player.inv.splice(i,1); bars(); }
+
+/* =========================
+   Combat & AI
+========================= */
+let comboCount=0, comboWindow=null;
+function melee(){
+  const now=performance.now();
+  if(comboWindow && now-comboWindow<500){ comboCount++; } else { comboCount=1; }
+  comboWindow=now;
+  let dmg=player.melee?2:1;
+  if(comboCount>=3){ dmg*=2; player.comboT=240; SFX.combo(); player.energy=Math.max(0,player.energy-10); comboCount=0; comboWindow=null; } else { SFX.hit(); }
+  player.slashT=200;
+  ents.forEach(e=>{ if(e.enemy && Math.hypot(e.x-player.x,e.y-player.y)<1.2){ e.hp-=dmg; e.hitT=200; if(e.hp<=0) die(e); }});
+  if(player.melee && player.meleeDur<999999){ if(--player.meleeDur<=0){ player.melee=false; toast('Sword broke'); } }
+}
+function ranged(){
+  if(!player.ranged){ toast('No crossbow yet'); return; }
+  let best=null,bd=999; ents.forEach(e=>{ if(e.enemy){ const d=Math.hypot(e.x-player.x,e.y-player.y); if(d>=5 && d<bd){ bd=d; best=e; } } });
+  if(!best){ toast('Must be ≥5 tiles away'); return; }
+  const a=Math.atan2(best.y-player.y,best.x-player.x);
+  ents.push({kind:'orb',x:player.x,y:player.y,vx:Math.cos(a)*0.55,vy:Math.sin(a)*0.55,ttl:300,dmg:3,fromPlayer:true});
+  SFX.orb();
+  if(player.rangedDur<999999){ if(--player.rangedDur<=0){ player.ranged=false; toast('Crossbow snapped'); } }
+}
+function doDash(){
+  if(player.dashCd>0||player.energy<20){ toast('Dash cooling / tired'); return; }
+  SFX.dash();
+  const dir=player.face[0]||player.face[1]?player.face:[1,0];
+  const tx=player.x+dir[0]*1.8,ty=player.y+dir[1]*1.8;
+  if(walkable(Math.round(tx),Math.round(player.y))) player.x=tx;
+  if(walkable(Math.round(player.x),Math.round(ty))) player.y=ty;
+  ents.forEach(e=>{ if(e.enemy && Math.hypot(e.x-player.x,e.y-player.y)<1.1){ e.hp-=1.5; e.hitT=150; if(e.hp<=0) die(e); }});
+  player.energy=Math.max(0,player.energy-20); player.dashCd=900;
+}
+function die(e){ coins+= (e.kind===EN.MAGE?3:2); SFX.coin(); if(chance(.12)) ents.push({kind:'loot',what:'pot',x:e.x,y:e.y,ttl:8000}); e.enemy=false; e.dead=true; }
+function ai(dt){
+  ents.forEach(e=>{
+    if(e.enemy){
+      e.anim+=dt;
+      const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1, sp=e.spd*dt/220;
+      if(e.kind===EN.GOB){ e.dashCd-=dt; if(e.dashCd<=0 && d>2 && d<4){ const a=Math.atan2(dy,dx); e.x+=Math.cos(a)*0.9; e.y+=Math.sin(a)*0.9; e.dashCd=1200; } }
+      const nx=e.x+dx/d*sp, ny=e.y+dy/d*sp; if(walkable(Math.round(nx),Math.round(e.y))) e.x=nx; if(walkable(Math.round(e.x),Math.round(ny))) e.y=ny;
+      e.cd=(e.cd||0)-dt;
+      if(e.ranged){ e.shootCd-=dt; if(e.shootCd<=0 && d>4){ const a=Math.atan2(dy,dx); ents.push({kind:'orb',x:e.x,y:e.y,vx:Math.cos(a)*0.35,vy:Math.sin(a)*0.35,ttl:320,dmg:1.2,fromEnemy:true}); SFX.orb(); e.shootCd=1100; } }
+      else { if(d<0.9 && e.cd<=0){ damage(1); e.cd=820; } }
+      if(e.hitT>0) e.hitT-=dt;
+    }else{
+      if(e.kind==='orb'){ e.x+=e.vx*dt; e.y+=e.vy*dt; e.ttl-=dt; if(e.fromEnemy && Math.hypot(player.x-e.x,player.y-e.y)<0.7){ damage(e.dmg||1); e.ttl=0; } ents.forEach(t=>{ if(t.enemy && !e.fromEnemy && Math.hypot(t.x-e.x,t.y-e.y)<0.7){ t.hp-=e.dmg||2; t.hitT=200; e.ttl=0; if(t.hp<=0) die(t);} }); if(e.ttl<=0) e.dead=true; }
+      if(e.kind==='loot'){ e.ttl-=dt; if(e.ttl<=0) e.dead=true; if(Math.hypot(e.x-player.x,e.y-player.y)<0.7){ giveItem(e.what); e.dead=true; } }
+    }
+  });
+  ents=ents.filter(e=>!e.dead);
+}
+function damage(n){ if(player.shield>0){player.shield--;return;} player.hp=Math.max(0,player.hp-n); SFX.hurt(); }
+
+/* =========================
+   Interactables
+========================= */
+function interact(){
+  const px=Math.round(player.x), py=Math.round(player.y); let did=false;
+  for(let y=py-1;y<=py+1;y++)for(let x=px-1;x<=px+1;x++){
+    const t=tileAt(x,y);
+    if(t===T.LEVER){ map[y][x]=T.FLOOR; for(let yy=1;yy<RH-1;yy++)for(let xx=1;xx<RW-1;xx++) if(map[yy][xx]===T.SECRETD){ map[yy][xx]=T.FLOOR; toast('Stone slides…'); did=true; break; } if(!did) toast('The lever clanks.'); did=true; }
+    else if(t===T.CHEST){ openChest(); map[y][x]=T.FLOOR; did=true; }
+    else if(t===T.SECRETD){ map[y][x]=T.FLOOR; toast('Hidden seam opens'); did=true; }
+    else if(t===T.TRADER){ openTrader(); did=true; }
+    else if(t===T.ANVIL){ openAnvil(); did=true; }
+    else if(t===T.POOL){ player.hp=player.hpMax; player.hunger=player.hungerMax; player.energy=player.energyMax; player.auraT=1200; SFX.heal(); toast('You feel renewed'); did=true; }
+  }
+  if(!did) toast("There's nothing there");
+}
+function openChest(){ const r=Math.random(); if(r<.35) giveItem('food'); else if(r<.55) giveItem('sword'); else if(r<.7) giveItem('xbow'); else if(r<.85) giveItem('pot'); else giveItem('shield'); }
+function openTrader(){ const trades=[{label:'Buy Sword (🪙 8)', cost:8, give:'sword'},{label:'Buy Crossbow (🪙 10)', cost:10, give:'xbow'},{label:'Buy Potion (🪙 5)', cost:5, give:'pot'},{label:'Sell Food (🪙 +2)', sell:'food', gain:2},{label:'Sell Shield (🪙 +4)', sell:'shield', gain:4}]; openPanel(`<h3>Wandering Trader</h3><p>Coins: ${coins}</p>`, trades.map(t=>({label:t.label,on:()=>{ if(t.give){ if(coins>=t.cost){ coins-=t.cost; giveItem(t.give); } else toast('Not enough coins'); } else { const idx=player.inv.findIndex(i=>i.what===t.sell); if(idx>-1){ player.inv.splice(idx,1); coins+=t.gain; SFX.coin(); } else toast('You lack that item'); } bars(); }}))); }
+function openAnvil(){ openPanel(`<h3>Smith’s Anvil</h3><p style="background:#0b0b0e;border:1px solid #2b2b33;padding:.5rem;border-radius:8px">Choose your path:</p>`,[{label:`A) 🗡️ Sword — +2 dmg, durability 70`,on:()=>{giveItem('sword');}},{label:`B) 🏹 Crossbow — fast draw, durability 45`,on:()=>{giveItem('xbow');}}]); }
+
+/* =========================
+   Drawing (with sprites)
+========================= */
+function drawWorld(t){
+  const camX=player.x*TILE - W/2, camY=player.y*TILE - H/2;
+  cx.imageSmoothingEnabled=false;
+  cx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg'); cx.fillRect(0,0,W,H);
+
+  // tiles pass
+  for(let y=0;y<RH;y++)for(let x=0;x<RW;x++){
+    const sX=x*TILE - camX, sY=y*TILE - camY, tt=map[y][x];
+    spr('tile_floor',sX,sY);
+    if(tt===T.WALL||tt===T.SECRETD) spr('tile_wall',sX,sY);
+    if(tt===T.DRIP) spr('tile_drip',sX,sY);
+    if(tt===T.POOL) spr('tile_pool',sX,sY);
+    if(tt===T.CHEST) spr('tile_chest',sX,sY);
+    if(tt===T.LEVER) spr('tile_lever',sX,sY);
+    if(tt===T.DOOR) spr('tile_door',sX,sY);
+    if(tt===T.ANVIL) spr('tile_anvil',sX,sY);
+    if(tt===T.TRADER) spr('tile_trader',sX,sY);
+    if(tt===T.TORCH){ spr('tile_torch',sX,sY); spr(((t/120|0)%2)?'torch_f1':'torch_f2',sX+6,sY+2,0.95); }
+  }
+
+  // player
+  const px=W/2|0, py=H/2|0;
+  if(player.auraT>0){ const a=Math.max(0,Math.min(1,player.auraT/800)); cx.globalAlpha=.25*a; cx.fillStyle="rgba(159,230,255,.4)"; cx.fillRect(px-10,py-14,20,28); cx.globalAlpha=1; }
+  const walkFrame = player.walk && ((t/120|0)%2) ? 'pl_walk' : 'pl_idle';
+  spr(walkFrame,px-8,py-10);
+  if(player.slashT>0){ const aa=Math.max(0,Math.min(1,player.slashT/200)); spr('pl_slash',px-4+player.face[0]*8,py-8+player.face[1]*4,aa); }
+  if(player.comboT>0){ const aa=Math.max(0,Math.min(1,player.comboT/240)); spr('pl_combo',px-9,py-12,aa); }
+
+  // entities
+  ents.forEach(e=>{
+    const ex=e.x*TILE - camX, ey=e.y*TILE - camY;
+    if(e.enemy){
+      const hit = e.hitT>0 ? 0.7 : 1;
+      const f=((e.anim/140)|0)%2;
+      if(e.kind===EN.SKEL) spr(f?'skel_b':'skel_a',ex-8,ey-9,hit);
+      else if(e.kind===EN.GOB) spr(f?'gob_b':'gob_a',ex-8,ey-9,hit);
+      else if(e.kind===EN.MAGE) spr(f?'mag_b':'mag_a',ex-8,ey-9,hit);
+    } else {
+      if(e.kind==='orb') spr('orb',ex-3,ey-3);
+      if(e.kind==='loot') spr('loot',ex-3,ey-3);
+    }
+  });
+
+  // vignette
+  cx.globalAlpha=.55; const g=cx.createRadialGradient(W/2,H/2,W*.25,W/2,H/2,W*.78);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,1)'); cx.fillStyle=g; cx.fillRect(0,0,W,H); cx.globalAlpha=1;
+}
+
+/* =========================
+   Loop
+========================= */
+function bars(){ hpVal.textContent=Math.round(player.hp); hpF.style.width=(player.hp/player.hpMax*100)+'%'; enF.style.width=(player.energy/player.energyMax*100)+'%'; huF.style.width=(player.hunger/player.hungerMax*100)+'%'; roomT.textContent='Room '+room; coinsT.textContent='🪙 '+coins; }
+
+let last=performance.now();
+function tick(){
+  const t=performance.now(), dt=Math.min(60,t-last); last=t;
+
+  // survival
+  player.hunger=Math.max(0, player.hunger - dt/60000*10);
+  const onPool=tileAt(Math.round(player.x),Math.round(player.y))===T.POOL;
+  player.energy=clamp(player.energy+(onPool?0.5:0.09)*dt,0,player.energyMax);
+  if(player.hunger>=player.hungerMax-0.1 && player.hp<player.hpMax) player.hp=Math.min(player.hpMax, player.hp+dt/1500);
+  if(player.dashCd>0) player.dashCd-=dt;
+  if(player.slashT>0) player.slashT-=dt;
+  if(player.comboT>0) player.comboT-=dt;
+  if(player.auraT>0) player.auraT-=dt;
+
+  // movement
+  let mx=(held.right?1:0)-(held.left?1:0), my=(held.down?1:0)-(held.up?1:0);
+  player.walk = !!(mx||my);
+  if(mx||my){
+    const len=Math.hypot(mx,my)||1; mx/=len; my/=len; player.face=[mx,my];
+    const sp=player.spd*(player.energy<=0?0.5:1);
+    const nx=player.x+mx*sp*dt/160, ny=player.y+my*sp*dt/160;
+    if(walkable(Math.round(nx),Math.round(player.y))) player.x=nx;
+    if(walkable(Math.round(player.x),Math.round(ny))) player.y=ny;
+  }
+
+  // exit
+  const tx=Math.round(player.x), ty=Math.round(player.y); if(tileAt(tx,ty)===T.DOOR){ room++; regen(); toast('Room '+room); }
+
+  ai(dt);
+  drawWorld(t);
+  bars();
+
+  if(player.hp<=0){
+    openPanel(`<h3 style="color:#ff9aa2">You fell in the dark</h3><p>Rooms cleared: ${room-1}</p>`,[{label:'Retry',on:()=>{ room=1; coins=0; Object.assign(player,{hp:10,hunger:10,energy:100,inv:[],melee:false,ranged:false,slashT:0,comboT:0,auraT:0}); regen(); panel.style.display='none'; }}]);
+    return;
+  }
+  requestAnimationFrame(tick);
+}
+
+/* =========================
+   Start
+========================= */
+function barsInit(){hpVal.textContent='10';}
+function boot(){
+  makeAtlas();
+  // try external sprites.png (optional)
+  loadExternalAtlas(()=>{ regen(); requestAnimationFrame(tick); });
+}
+window.addEventListener('load', ()=>{ boot(); barsInit(); });
+cv.addEventListener('pointerdown', function once(){ try{SFX.start();}catch{} cv.removeEventListener('pointerdown', once); }, {passive:true});
+
+/* =========================
+   Button actions (after defs)
+========================= */
+function openTrader(){ const trades=[{label:'Buy Sword (🪙 8)', cost:8, give:'sword'},{label:'Buy Crossbow (🪙 10)', cost:10, give:'xbow'},{label:'Buy Potion (🪙 5)', cost:5, give:'pot'},{label:'Sell Food (🪙 +2)', sell:'food', gain:2},{label:'Sell Shield (🪙 +4)', sell:'shield', gain:4}]; openPanel(`<h3>Wandering Trader</h3><p>Coins: ${coins}</p>`, trades.map(t=>({label:t.label,on:()=>{ if(t.give){ if(coins>=t.cost){ coins-=t.cost; giveItem(t.give); } else toast('Not enough coins'); } else { const idx=player.inv.findIndex(i=>i.what===t.sell); if(idx>-1){ player.inv.splice(idx,1); coins+=t.gain; SFX.coin(); } else toast('You lack that item'); } bars(); }}))); }
+</script>
+</body>
+</html>
