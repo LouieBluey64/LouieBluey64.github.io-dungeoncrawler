@@ -14,7 +14,7 @@
         }
     },
     "meta": {
-        "image": "skeleton_idle.png",
+        "image": "skeleton_idle.png.PNG",
         "size": { "w": 128, "h": 32 },
         "frameTags": [
             { "name": "idle", "from": 0, "to": 3, "direction": "forward" }
