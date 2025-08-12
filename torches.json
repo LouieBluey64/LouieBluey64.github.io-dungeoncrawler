@@ -1,0 +1,26 @@
+{
+  "frames": {
+    "torch_1": {
+      "frame": { "x": 0, "y": 0, "w": 32, "h": 64 },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 32, "h": 64 },
+      "sourceSize": { "w": 32, "h": 64 }
+    },
+    "torch_2": {
+      "frame": { "x": 36, "y": 0, "w": 32, "h": 64 },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 32, "h": 64 },
+      "sourceSize": { "w": 32, "h": 64 }
+    }
+  },
+  "meta": {
+    "app": "manual",
+    "version": "1.0",
+    "image": "torches.png",
+    "format": "RGBA8888",
+    "size": { "w": 68, "h": 64 },
+    "scale": "1"
+  }
+}
