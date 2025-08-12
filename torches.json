@@ -18,7 +18,7 @@
   "meta": {
     "app": "manual",
     "version": "1.0",
-    "image": "torches.png",
+    "image": "torches.png.PNG",
     "format": "RGBA8888",
     "size": { "w": 68, "h": 64 },
     "scale": "1"
