@@ -6,7 +6,7 @@
     "ranged_back_3": { "frame": { "x": 96, "y": 0, "w": 32, "h": 32 } }
   },
   "meta": {
-    "image": "ranged_back.png",
+    "image": "ranged_back.png.PNG",
     "size": { "w": 128, "h": 32 },
     "scale": "1"
   }
