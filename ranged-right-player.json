@@ -2,7 +2,7 @@
   "meta": {
     "app": "CU-Atlas",
     "version": "1.0",
-    "image": "player_ranged_left.png",
+    "image": "player_ranged_left.png.PNG",
     "size": { "w": 128, "h": 32 },
     "scale": "1"
   },
