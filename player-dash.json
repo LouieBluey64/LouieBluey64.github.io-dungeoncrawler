@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "image": "player_dash_right.png",
+    "size": { "w": 128, "h": 32 },
+    "frameSize": { "w": 32, "h": 32 },
+    "scale": 1
+  },
+  "frames": {
+    "player/dash/right/0": { "x": 0,   "y": 0, "w": 32, "h": 32 },
+    "player/dash/right/1": { "x": 32,  "y": 0, "w": 32, "h": 32 },
+    "player/dash/right/2": { "x": 64,  "y": 0, "w": 32, "h": 32 },
+    "player/dash/right/3": { "x": 96,  "y": 0, "w": 32, "h": 32 }
+  },
+  "animations": {
+    "player_dash_right": [
+      "player/dash/right/0",
+      "player/dash/right/1",
+      "player/dash/right/2",
+      "player/dash/right/3"
+    ]
+  }
+}
