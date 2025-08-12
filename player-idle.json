@@ -32,7 +32,7 @@
     "meta": {
         "app": "Custom JSON Generator",
         "version": "1.0",
-        "image": "idle_strip.png",
+        "image": "idle_strip.png.PNG",
         "size": { "w": 128, "h": 32 },
         "scale": "1"
     }
