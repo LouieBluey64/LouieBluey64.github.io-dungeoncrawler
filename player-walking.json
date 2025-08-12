@@ -1,0 +1,13 @@
+{
+  "frames": {
+    "walk_down":  { "frame": { "x": 0,   "y": 0, "w": 32, "h": 32 } },
+    "walk_up":    { "frame": { "x": 32,  "y": 0, "w": 32, "h": 32 } },
+    "walk_left":  { "frame": { "x": 64,  "y": 0, "w": 32, "h": 32 } },
+    "walk_right": { "frame": { "x": 96,  "y": 0, "w": 32, "h": 32 } }
+  },
+  "meta": {
+    "image": "player_walk.png",
+    "size": { "w": 128, "h": 32 },
+    "scale": "1"
+  }
+}
