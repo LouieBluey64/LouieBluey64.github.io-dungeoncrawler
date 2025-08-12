@@ -1,0 +1,16 @@
+{
+  "frames": {
+    "chest": {
+      "frame": { "x": 4, "y": 4, "w": 32, "h": 32 },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 32, "h": 32 },
+      "sourceSize": { "w": 32, "h": 32 }
+    }
+  },
+  "meta": {
+    "image": "chest.png",
+    "size": { "w": 40, "h": 40 },
+    "scale": "1"
+  }
+}
