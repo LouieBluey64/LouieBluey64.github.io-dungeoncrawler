@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Crypt Unending — Asset JSON Build</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<style>
+  :root{
+    --bg:#0b0b0e; --ui:#141418; --ui2:#0e0f13; --gold:#ffd26a; --hp:#c23; --en1:#58c0ff; --en2:#2a6fa3;
+  }
+  *{ -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; touch-action:manipulation; }
+  html,body{margin:0;height:100%;background:var(--bg);color:#eee;font-family:ui-rounded,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+  #cv{position:fixed; inset:0; width:100dvw; height:100dvh; image-rendering:pixelated; background:#000; touch-action:none}
+
+  /* HUD */
+  #hud{position:fixed; inset:0; pointer-events:none}
+  .bar{height:10px;width:200px;background:#0d0e13;border:1px solid #2b2b33;border-radius:6px;position:absolute}
+  .fill{position:absolute;inset:0;width:100%}
+  #hpT{left:10px;top:8px;font-weight:900}
+  #hpB{left:80px;top:8px}.hpF{background:linear-gradient(180deg,#c23,#821b25)}
+  #enB{left:80px;top:26px}.enF{background:linear-gradient(180deg,#58c0ff,#2a6fa3)}
+  #roomT{position:absolute;right:12px;top:8px;font-weight:900;color:#cfd2e6}
+  #coinsT{position:absolute;right:12px;top:28px;color:var(--gold);font-weight:900}
+  #msg{position:fixed;left:50%;top:10px;transform:translateX(-50%);background:#111a;border:1px solid #2a2a33;border-radius:10px;padding:.35rem .7rem;display:none}
+
+  /* D‑Pad (left) + action buttons (right) */
+  .pad{position:absolute;pointer-events:auto}
+  .btn{width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid #3a3a45;color:#e8e8f0;display:flex;align-items:center;justify-content:center;font-size:26px}
+
+  #dpad{left:16px;bottom:16px;width:192px;height:192px;pointer-events:none;position:absolute}
+  .dkey{position:absolute;pointer-events:auto}
+  #up{left:64px;top:0}
+  #down{left:64px;bottom:0}
+  #left{left:0;top:64px}
+  #right{right:0;top:64px}
+
+  #btnDash{right:12px;bottom:168px}
+  #btnRanged{right:12px;bottom:92px}
+  #btnMelee{right:12px;bottom:16px}
+  #btnInteract{right:92px;bottom:132px}
+  #btnInv{right:92px;bottom:56px}
+
+  /* Panel / inventory */
+  #panel{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;pointer-events:auto}
+  .card{background:linear-gradient(180deg,#15151a,#0f0f14);border:1px solid #2a2a33;border-radius:14px;padding:16px;max-width:640px;color:#ddd}
+  .choices{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.6rem}
+  .choice{pointer-events:auto;padding:.5rem .7rem;border:1px solid #3a3a45;border-radius:10px;background:#141418;cursor:pointer}
+  #invGrid{display:grid;grid-template-columns:repeat(5,44px);gap:6px;margin-top:.6rem}
+  .slot{width:44px;height:44px;background:#0d0d12;border:1px solid #2b2b33;border-radius:8px;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<canvas id="cv" width="384" height="216"></canvas>
+
+<div id="hud">
+  <div id="hpT">♥ <span id="hpVal">10</span>/10</div>
+  <div id="hpB" class="bar"><div id="hpF" class="fill hpF"></div></div>
+  <div id="enB" class="bar"><div id="enF" class="fill enF"></div></div>
+  <div id="roomT">Room 1-1</div>
+  <div id="coinsT">🪙 0</div>
+</div>
+
+<div id="msg"></div>
+<div id="panel"><div class="card" id="panelC"></div></div>
+
+<!-- D‑pad & buttons -->
+<div id="dpad">
+  <button id="up" class="btn dkey">▲</button>
+  <button id="down" class="btn dkey">▼</button>
+  <button id="left" class="btn dkey">◀</button>
+  <button id="right" class="btn dkey">▶</button>
+</div>
+<button id="btnDash" class="pad btn" aria-label="Dash">💨</button>
+<button id="btnRanged" class="pad btn" aria-label="Ranged">🏹</button>
+<button id="btnMelee" class="pad btn" aria-label="Melee">🗡️</button>
+<button id="btnInteract" class="pad btn" aria-label="Interact">✋</button>
+<button id="btnInv" class="pad btn" aria-label="Inventory">🎒</button>
+
+<script>
+/* =========================
+   Canvas & helpers
+========================= */
+const cv=document.getElementById('cv'), cx=cv.getContext('2d');
+let W=cv.width,H=cv.height,SCALE=3;
+function fit(){const vw=innerWidth,vh=innerHeight;SCALE=Math.max(1,Math.floor(Math.min(vw/W,vh/H)));cv.style.width=W*SCALE+'px';cv.style.height=H*SCALE+'px';}
+addEventListener('resize',fit); addEventListener('orientationchange',fit); fit();
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v), rand=(a,b)=>Math.random()*(b-a)+a, rint=(a,b)=>Math.floor(rand(a,b+1)), chance=p=>Math.random()<p;
+
+/* =========================
+   SFX (tiny synth beeps)
+========================= */
+const SFX=(()=>{const C=new (window.AudioContext||window.webkitAudioContext)();let ok=false;
+async function start(){if(C.state!=='running'){try{await C.resume();}catch{}}ok=true;}
+function blip(f=500,d=0.07,v=0.2,t='square'){if(!ok)return;const o=C.createOscillator(),g=C.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(C.destination);const n=C.currentTime;o.start(n);g.gain.exponentialRampToValueAtTime(0.0001,n+d);o.stop(n+d+0.02);}
+return{start,hit:()=>blip(520,0.06,0.22,'square'),combo:()=>blip(760,0.12,0.28,'square'),dash:()=>blip(140,0.1,0.25,'sine'),hurt:()=>blip(160,0.12,0.3,'triangle'),pick:()=>blip(880,0.07,0.22,'square'),coin:()=>blip(740,0.06,0.22,'square'),heal:()=>blip(900,0.1,0.25,'sine'),orb:()=>blip(420,0.09,0.18,'sine')};})();
+
+/* =========================
+   Asset loader (JSON + PNG)
+   Supports:
+   - A) frames: [{name,x,y,w,h}]
+   - B) tileW/tileH + frames:[names] (strip/grid)
+   - C) tileW/tileH + frameCount
+   - D) fallback: slice full width into 32x32 frames
+========================= */
+const TILE=32; // world tile size (matches your art)
+const Atlases={}; // key -> {img, frames:[{x,y,w,h,name}]}
+const Files = [
+  // Dungeon
+  {key:'walls', json:'Walls.json'},
+  {key:'floor', json:'floor.json'},
+  {key:'door',  json:'door.json'},
+  {key:'chest', json:'chest.json'},
+  {key:'torches', json:'torches.json'},
+
+  // Player
+  {key:'pl_idle', json:'player-idle.json'},           // idle_strip.png.PNG
+  {key:'pl_walk', json:'player-walking.json'},        // player_walk.png.PNG
+  {key:'pl_dash', json:'player-dash.json'},           // player_dash_right.png.PNG (we'll flip for other dirs)
+  {key:'pl_melee_f', json:'player-forward-melee.json'},
+  {key:'pl_melee_b', json:'player-backwards-melee.json'},
+  {key:'pl_melee_r', json:'melee-right.json'},
+  {key:'pl_melee_l', json:'melee-attack-left.json'},  // player_slash_overhead.png.PNG
+  {key:'pl_rng_f', json:'ranged-forward-player.json'},
+  {key:'pl_rng_b', json:'ranged-back.json'},
+  {key:'pl_rng_r', json:'ranged-right-player.json'},
+  {key:'pl_rng_l', json:'player_ranged_left.json'},   // your file in list
+  {key:'pl_potion', json:'potion.json'},
+
+  // Enemies
+  {key:'skel_idle', json:'skeleton-idle.json'},
+  {key:'skel_walk', json:'skeleton-walking.json'}
+];
+
+function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src+'?t='+(Date.now());});}
+async function loadJSON(url){const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url); return r.json();}
+function fromGrid(image, tileW, tileH, count, offsetX=0,offsetY=0, spacing=0){
+  const frames=[]; let x=offsetX,y=offsetY, w=image.width, got=0;
+  while(got<count && y+tileH<=image.width+image.height+9999){ // loose guard
+    frames.push({x,y,w:tileW,h:tileH,name:String(got)});
+    got++; x+=tileW+spacing; if(x+tileW>image.width){ x=offsetX; y+=tileH+spacing; }
+  }
+  return frames;
+}
+async function loadAtlas(def){
+  const data=await loadJSON(def.json);
+  const imgName = (data.image || (data.meta && data.meta.image));
+  const png = imgName ? imgName : (def.json.replace(/\.json$/i,'.png.PNG')); // safe fallback to your naming
+  const img = await loadImage(png);
+  let frames=[];
+  if(Array.isArray(data.frames) && typeof data.frames[0]==='object' && 'x' in data.frames[0]){
+    // A) explicit frames
+    frames = data.frames.map(f=>({x:f.x,y:f.y,w:f.w||f.width,h:f.h||f.height,name:f.name||''}));
+  }else if(Array.isArray(data.frames) && (data.tileW||data.tileWidth)){
+    // B) names + tile size
+    const tw=data.tileW||data.tileWidth||TILE, th=data.tileH||data.tileHeight||TILE;
+    const count=data.frames.length;
+    frames = fromGrid(img, tw, th, count, data.offsetX||0, data.offsetY||0, data.spacing||0);
+    frames.forEach((f,i)=>f.name=data.frames[i]||String(i));
+  }else if((data.tileW||data.tileWidth) && (data.frameCount||data.count)){
+    // C) size + count only
+    const tw=data.tileW||data.tileWidth||TILE, th=data.tileH||data.tileHeight||TILE;
+    const count=data.frameCount||data.count;
+    frames = fromGrid(img, tw, th, count, data.offsetX||0, data.offsetY||0, data.spacing||0);
+  }else{
+    // D) fallback: assume 32x32 horizontal strip
+    const tw=32, th=32; const count=Math.floor(img.width/tw);
+    frames = fromGrid(img, tw, th, count, 0,0, 0);
+  }
+  Atlases[def.key]={img,frames};
+}
+
+async function loadAll(){
+  for(const f of Files){
+    try{ await loadAtlas(f); }
+    catch(e){ console.warn('Failed to load', f, e); Atlases[f.key]={img:null,frames:[]}; }
+  }
+}
+
+/* =========================
+   Minimal animation helper
+========================= */
+function makeAnim(atlasKey, idxs, speed=120){ return {atlas:atlasKey, idxs, t:0, i:0, speed}; }
+function stepAnim(anim, dt){ anim.t+=dt; while(anim.t>anim.speed){ anim.t-=anim.speed; anim.i=(anim.i+1)%anim.idxs.length; } }
+function drawAnim(anim, x,y, flipX=false){
+  const A=Atlases[anim.atlas]; if(!A||!A.img||A.frames.length===0) return;
+  const fr=A.frames[anim.idxs[anim.i] ?? anim.idxs[0]]; if(!fr) return;
+  if(flipX){ cx.save(); cx.scale(-1,1); cx.drawImage(A.img,fr.x,fr.y,fr.w,fr.h, -(x|0)-fr.w, y|0, fr.w, fr.h); cx.restore(); }
+  else cx.drawImage(A.img,fr.x,fr.y,fr.w,fr.h, x|0, y|0, fr.w, fr.h);
+}
+
+/* =========================
+   Game state
+========================= */
+const ROOM_W=18, ROOM_H=11; // in tiles
+let level=1, subroom=1, coins=0;
+
+const T={FLOOR:0,WALL:1,DOOR:2,POOL:3,CHEST:4,TORCH:5};
+let room=[]; // 2D int tiles
+function mkRoom(){
+  room=Array.from({length:ROOM_H},()=>Array(ROOM_W).fill(T.FLOOR));
+  for(let y=0;y<ROOM_H;y++)for(let x=0;x<ROOM_W;x++){
+    if(x===0||y===0||x===ROOM_W-1||y===ROOM_H-1) room[y][x]=T.WALL;
+    else if(chance(.15)) room[y][x]=T.WALL;
+  }
+  // carve a little space center
+  for(let y=5;y<=6;y++)for(let x=7;x<=10;x++) room[y][x]=T.FLOOR;
+
+  // door to next subroom
+  const side=rint(0,3);
+  if(side===0) room[0][rint(3,ROOM_W-4)]=T.DOOR;
+  if(side===1) room[ROOM_H-1][rint(3,ROOM_W-4)]=T.DOOR;
+  if(side===2) room[rint(3,ROOM_H-4)][0]=T.DOOR;
+  if(side===3) room[rint(3,ROOM_H-4)][ROOM_W-1]=T.DOOR;
+
+  if(chance(.25)) room[rint(2,ROOM_H-3)][rint(2,ROOM_W-3)]=T.CHEST;
+  if(chance(.30)) room[rint(2,ROOM_H-3)][rint(2,ROOM_W-3)]=T.POOL;
+  for(let i=0;i<rint(2,4);i++) room[rint(2,ROOM_H-3)][rint(2,ROOM_W-3)]=T.TORCH;
+
+  // spawn a few skeletons
+  mobs.length=0;
+  const n=rint(1,3+Math.min(5,level));
+  for(let i=0;i<n;i++) spawnSkeleton(rint(2,ROOM_W-3), rint(2,ROOM_H-3));
+}
+
+/* =========================
+   Entities
+========================= */
+const player={
+  x:ROOM_W/2, y:ROOM_H/2, vx:0,vy:0, spd:2.3, // slower than before
+  hp:10, hpMax:10, energy:100, energyMax:100,
+  dir:'down', // 'down','up','left','right'
+  state:'idle', // 'idle','walk','melee','ranged','dash','drink','hurt','dead'
+  dashCd:0, inv:{pot:1}, facingFlip:false,
+  anim:null, anims:{}
+};
+
+const mobs=[]; // skeletons only
+function spawnSkeleton(x,y){
+  mobs.push({
+    kind:'skeleton',
+    x,y, hp:4, spd:1.6, cd:0, state:'walk', dir:'down',
+    animWalk: makeAnim('skel_walk',[0,1,2,3],140),
+    animIdle: makeAnim('skel_idle',[0,1,2,3],240),
+    hitT:0
+  });
+}
+
+/* =========================
+   Inputs (D‑Pad + buttons)
+========================= */
+const held={up:false,down:false,left:false,right:false};
+function bindHold(id,flag){
+  const el=document.getElementById(id);
+  el.addEventListener('touchstart',e=>{e.preventDefault();held[flag]=true;},{passive:false});
+  el.addEventListener('touchend',e=>{e.preventDefault();held[flag]=false;},{passive:false});
+  el.addEventListener('touchcancel',()=>{held[flag]=false;});
+}
+bindHold('up','up'); bindHold('down','down'); bindHold('left','left'); bindHold('right','right');
+
+document.getElementById('btnDash').addEventListener('touchstart',e=>{e.preventDefault();doDash();},{passive:false});
+document.getElementById('btnMelee').addEventListener('touchstart',e=>{e.preventDefault();doMelee();},{passive:false});
+document.getElementById('btnRanged').addEventListener('touchstart',e=>{e.preventDefault();doRanged();},{passive:false});
+document.getElementById('btnInteract').addEventListener('touchstart',e=>{e.preventDefault();doInteract();},{passive:false});
+document.getElementById('btnInv').addEventListener('touchstart',e=>{e.preventDefault();openInventory();},{passive:false});
+let lastTap=0; document.addEventListener('touchend',e=>{const n=Date.now(); if(n-lastTap<300) e.preventDefault(); lastTap=n;},{passive:false});
+
+/* =========================
+   Panels / inventory
+========================= */
+const panel=document.getElementById('panel'), panelC=document.getElementById('panelC'), msg=document.getElementById('msg');
+let msgTo=0; function toast(t,ms=1000){ msg.textContent=t; msg.style.display='block'; clearTimeout(msgTo); msgTo=setTimeout(()=>msg.style.display='none',ms); }
+function openPanel(html,choices){
+  panelC.innerHTML=html+(choices?`<div class="choices">${choices.map(c=>`<button class="choice">${c.label}</button>`).join('')}</div>`:'');
+  panel.style.display='flex';
+  if(choices){ panelC.querySelectorAll('.choice').forEach((b,i)=>b.onclick=()=>{panel.style.display='none'; choices[i].on();}); }
+  else panel.onclick=()=>panel.style.display='none';
+}
+function openInventory(){
+  openPanel(`<h3>Inventory</h3><div id="invGrid"><div class="slot">🧪 × ${player.inv.pot||0}</div></div><p>Tap to drink.</p>`);
+  panelC.querySelector('.slot').onclick=()=>{panel.style.display='none'; drinkPotion();};
+}
+
+/* =========================
+   Anim sets (by index order)
+   We don’t rely on frame names — just order.
+========================= */
+function setAnimSets(){
+  // For 4-frame strips per direction we assume order: [down, left, right, up].
+  const FOUR = i => [i*4+0, i*4+1, i*4+2, i*4+3];
+
+  const idleAll = Atlases['pl_idle']?.frames?.length>=4 ? [0,1,2,3] : [0,0,0,0];
+  const walkAll = Atlases['pl_walk']?.frames?.length>=4 ? [0,1,2,3] : idleAll;
+
+  player.anims = {
+    idle:{down: makeAnim('pl_idle',[idleAll[0]],500), left:makeAnim('pl_idle',[idleAll[1]],500), right:makeAnim('pl_idle',[idleAll[2]],500), up:makeAnim('pl_idle',[idleAll[3]],500)},
+    walk:{down: makeAnim('pl_walk',FOUR(0),120), left:makeAnim('pl_walk',FOUR(0),120), right:makeAnim('pl_walk',FOUR(0),120), up:makeAnim('pl_walk',FOUR(0),120)}, // if your walk sheet is 4 total, reuse
+    melee:{
+      down: makeAnim('pl_melee_f', [0,1,2,3],90),
+      up:   makeAnim('pl_melee_b', [0,1,2,3],90),
+      right:makeAnim('pl_melee_r', [0,1,2,3],90),
+      left: makeAnim('pl_melee_l', [0,1,2,3],90)
+    },
+    ranged:{
+      down: makeAnim('pl_rng_f',[0,1,2,3],110),
+      up:   makeAnim('pl_rng_b',[0,1,2,3],110),
+      right:makeAnim('pl_rng_r',[0,1,2,3],110),
+      left: makeAnim('pl_rng_l',[0,1,2,3],110)
+    },
+    dash:{ right: makeAnim('pl_dash',[0,1,2,3],60) } // we’ll flip for left
+  };
+  player.anim = player.anims.idle.down;
+}
+
+/* =========================
+   Mechanics
+========================= */
+function tileAt(tx,ty){ if(ty<0||ty>=ROOM_H||tx<0||tx>=ROOM_W) return T.WALL; return room[ty][tx]; }
+function walkable(tx,ty){ const t=tileAt(tx,ty); return t!==T.WALL; }
+
+function doDash(){
+  if(player.dashCd>0 || player.energy<20) { toast('Tired / cooldown'); return; }
+  SFX.dash();
+  player.state='dash';
+  player.anim = player.anims.dash.right;
+  const dir=player.dir;
+  let dx=0,dy=0, flip=false;
+  if(dir==='left'){dx=-1;flip=true;}
+  if(dir==='right'){dx=1;}
+  if(dir==='up'){dy=-1;}
+  if(dir==='down'){dy=1;}
+  // move 2 tiles if free
+  for(let i=0;i<2;i++){
+    const nx=player.x+dx, ny=player.y+dy;
+    if(walkable(Math.round(nx),Math.round(ny))) { player.x=nx; player.y=ny; }
+  }
+  player.energy=Math.max(0,player.energy-20);
+  player.dashCd=900; // ms
+  setTimeout(()=>{ player.state='idle'; }, 220);
+  player.facingFlip = flip;
+}
+
+function doMelee(){
+  SFX.hit();
+  player.state='melee';
+  player.anim = player.anims.melee[player.dir];
+  // hit anything near
+  mobs.forEach(m=>{
+    const d=Math.hypot(m.x-player.x, m.y-player.y);
+    if(d<1.2){ m.hp-=2; m.hitT=180; if(m.hp<=0) m.dead=true; }
+  });
+  setTimeout(()=>{ if(player.state==='melee') player.state='idle'; }, 250);
+}
+
+function doRanged(){
+  if(player.energy<10){ toast('No energy'); return; }
+  SFX.orb();
+  player.state='ranged';
+  player.anim = player.anims.ranged[player.dir];
+  bullets.push(makeBolt(player.x,player.y,player.dir,true));
+  player.energy=Math.max(0,player.energy-10);
+  setTimeout(()=>{ if(player.state==='ranged') player.state='idle'; }, 260);
+}
+
+function doInteract(){
+  const tx=Math.round(player.x), ty=Math.round(player.y);
+  // check 1 tile around
+  for(let y=ty-1;y<=ty+1;y++)for(let x=tx-1;x<=tx+1;x++){
+    const t=tileAt(x,y);
+    if(t===T.CHEST){ // give random thing (just potion or coins)
+      if(chance(.5)){ player.inv.pot=(player.inv.pot||0)+1; SFX.pick(); toast('+1 Potion'); }
+      else { coins+=rint(1,4); SFX.coin(); toast('Coins +'+coins); }
+      room[y][x]=T.FLOOR;
+      return;
+    }
+    if(t===T.POOL){ player.hp=player.hpMax; player.energy=player.energyMax; SFX.heal(); toast('Restored'); return; }
+    if(t===T.DOOR){ // next subroom
+      subroom++; if(subroom>3){ subroom=1; level++; }
+      mkRoom(); player.x=ROOM_W/2; player.y=ROOM_H/2; toast(`Room ${level}-${subroom}`);
+      return;
+    }
+  }
+  toast("There's nothing there");
+}
+function drinkPotion(){
+  if((player.inv.pot||0)<=0) return toast('No potion');
+  player.inv.pot--; player.hp=player.hpMax; player.energy=player.energyMax; SFX.heal(); toast('Glug glug…');
+}
+
+/* =========================
+   Projectiles
+========================= */
+const bullets=[];
+function makeBolt(x,y,dir,fromPlayer){
+  let vx=0,vy=0;
+  if(dir==='left') vx=-0.02;
+  if(dir==='right') vx= 0.02;
+  if(dir==='up') vy=-0.02;
+  if(dir==='down') vy=0.02;
+  return {x,y,vx,vy,life:1500,fromPlayer};
+}
+
+/* =========================
+   AI
+========================= */
+function ai(dt){
+  mobs.forEach(m=>{
+    // chase
+    const dx=player.x-m.x, dy=player.y-m.y, d=Math.hypot(dx,dy)||1;
+    const dir = Math.abs(dx)>Math.abs(dy)? (dx>0?'right':'left') : (dy>0?'down':'up');
+    m.dir=dir;
+
+    const sp=m.spd*dt/16;
+    const nx=m.x+(dx/d)*sp, ny=m.y+(dy/d)*sp;
+    if(walkable(Math.round(nx),Math.round(m.y))) m.x=nx;
+    if(walkable(Math.round(m.x),Math.round(ny))) m.y=ny;
+
+    m.cd-=dt; if(m.cd<=0 && d<0.9){ // stab
+      player.hp=Math.max(0,player.hp-1); SFX.hurt(); m.cd=900;
+    }
+    if(m.hitT>0) m.hitT-=dt;
+
+    stepAnim(m.animWalk,dt); stepAnim(m.animIdle,dt);
+  });
+  // cull
+  for(let i=mobs.length-1;i>=0;i--) if(mobs[i].dead) mobs.splice(i,1);
+}
+
+/* =========================
+   Drawing
+========================= */
+function drawTile(name, idx, dx,dy){
+  const A=Atlases[name]; if(!A||!A.img||!A.frames[idx]) return;
+  const f=A.frames[idx]; cx.drawImage(A.img,f.x,f.y,f.w,f.h, dx|0, dy|0, f.w, f.h);
+}
+function drawTorchFrame(t,dx,dy){
+  const A=Atlases['torches']; if(!A||A.frames.length<2) return;
+  const idx=((t/180|0)%2); const f=A.frames[idx];
+  cx.drawImage(A.img,f.x,f.y,f.w,f.h, dx|0, dy|0, f.w, f.h);
+}
+
+function drawLighting(t){
+  // overall darkness
+  cx.fillStyle='rgba(0,0,0,0.85)'; cx.fillRect(0,0,W,H);
+  cx.globalCompositeOperation='destination-out';
+
+  // player cone
+  const px=W/2, py=H/2;
+  const g=cx.createRadialGradient(px,py,20, px,py,120);
+  g.addColorStop(0,'rgba(0,0,0,1)');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=g; cx.beginPath(); cx.arc(px,py,120,0,Math.PI*2); cx.fill();
+
+  // torches
+  for(let y=0;y<ROOM_H;y++)for(let x=0;x<ROOM_W;x++){
+    if(room[y][x]===T.TORCH){
+      const sx=(x*TILE - camX)|0, sy=(y*TILE - camY)|0;
+      const gt=cx.createRadialGradient(sx+16,sy+8,4, sx+16,sy+8,70);
+      gt.addColorStop(0,'rgba(0,0,0,1)');
+      gt.addColorStop(1,'rgba(0,0,0,0)');
+      cx.fillStyle=gt; cx.beginPath(); cx.arc(sx+16,sy+8,70,0,Math.PI*2); cx.fill();
+    }
+  }
+  cx.globalCompositeOperation='source-over';
+}
+
+let camX=0, camY=0;
+function drawWorld(t,dt){
+  camX = player.x*TILE - W/2; camY = player.y*TILE - H/2;
+  cx.imageSmoothingEnabled=false;
+  cx.clearRect(0,0,W,H);
+
+  // tiles
+  for(let y=0;y<ROOM_H;y++)for(let x=0;x<ROOM_W;x++){
+    const dx=(x*TILE - camX)|0, dy=(y*TILE - camY)|0;
+    // floor
+    drawTile('floor',0,dx,dy);
+    // walls
+    if(room[y][x]===T.WALL){ // two variants
+      const idx=((x+y)&1); drawTile('walls',idx,dx,dy);
+    }
+    // special
+    if(room[y][x]===T.DOOR){ drawTile('door',0,dx,dy); }
+    if(room[y][x]===T.CHEST){ drawTile('chest',0,dx,dy); }
+    if(room[y][x]===T.POOL){ // fake pool using floor tile tinted
+      cx.fillStyle='#10324d'; cx.fillRect(dx+4,dy+4,24,24);
+    }
+  }
+
+  // torches (draw sprite + later lights)
+  for(let y=0;y<ROOM_H;y++)for(let x=0;x<ROOM_W;x++){
+    if(room[y][x]===T.TORCH){
+      const dx=(x*TILE - camX)|0, dy=(y*TILE - camY)|0;
+      drawTorchFrame(t,dx,dy);
+    }
+  }
+
+  // bullets
+  bullets.forEach(b=>{
+    cx.fillStyle='#bcd1ff';
+    cx.fillRect((b.x*TILE - camX)|0, (b.y*TILE - camY)|0, 4,4);
+  });
+
+  // enemies
+  mobs.forEach(m=>{
+    const dx=(m.x*TILE - camX)|0, dy=(m.y*TILE - camY)|0;
+    const hitShade = m.hitT>0 ? 0.6 : 1;
+    cx.globalAlpha=hitShade;
+    // pick anim
+    const an = m.state==='walk'? m.animWalk : m.animIdle;
+    const flip = (m.dir==='left');
+    drawAnim(an, dx, dy- (TILE-Atlases['skel_walk']?.frames?.[0]?.h||0), flip);
+    cx.globalAlpha=1;
+  });
+
+  // player
+  const px=(player.x*TILE - camX)|0, py=(player.y*TILE - camY)|0;
+  stepAnim(player.anim,dt);
+  const flip = (player.dir==='left') || (player.state==='dash'&&player.facingFlip);
+  drawAnim(player.anim, px, py- (TILE-Atlases['pl_idle']?.frames?.[0]?.h||0), flip);
+
+  // lighting pass
+  drawLighting(t);
+}
+
+/* =========================
+   Update loop
+========================= */
+const hpVal=document.getElementById('hpVal'), hpF=document.getElementById('hpF'), enF=document.getElementById('enF'), roomT=document.getElementById('roomT'), coinsT=document.getElementById('coinsT');
+function bars(){ hpVal.textContent=Math.round(player.hp); hpF.style.width=(player.hp/player.hpMax*100)+'%'; enF.style.width=(player.energy/player.energyMax*100)+'%'; roomT.textContent=`Room ${level}-${subroom}`; coinsT.textContent='🪙 '+coins; }
+
+function stepPlayer(dt){
+  // movement (D‑pad)
+  let mx=(held.right?1:0)-(held.left?1:0), my=(held.down?1:0)-(held.up?1:0);
+  if(mx||my){
+    const len=Math.hypot(mx,my)||1; mx/=len; my/=len;
+    if(Math.abs(mx)>Math.abs(my)) player.dir = mx>0 ? 'right' : 'left';
+    else player.dir = my>0 ? 'down' : 'up';
+    const sp=player.spd*(player.energy<=0?0.5:1);
+    const nx=player.x+mx*sp*dt/160, ny=player.y+my*sp*dt/160;
+    if(walkable(Math.round(nx),Math.round(player.y))) player.x=nx;
+    if(walkable(Math.round(player.x),Math.round(ny))) player.y=ny;
+    if(player.state==='idle'||player.state==='walk'){ player.state='walk'; player.anim = player.anims.walk[player.dir]; }
+  } else {
+    if(['walk','idle'].includes(player.state)){ player.state='idle'; player.anim = player.anims.idle[player.dir]; }
+  }
+  if(player.dashCd>0) player.dashCd-=dt;
+  // regen energy slowly
+  player.energy=clamp(player.energy + 0.06*dt, 0, player.energyMax);
+}
+
+function stepBullets(dt){
+  bullets.forEach(b=>{
+    b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
+    // hit wall?
+    if(!walkable(Math.round(b.x),Math.round(b.y))) b.life=0;
+    // hit mobs
+    if(b.fromPlayer){
+      mobs.forEach(m=>{
+        if(Math.hypot(m.x-b.x,m.y-b.y)<0.5){ m.hp-=2; m.hitT=200; b.life=0; if(m.hp<=0) m.dead=true; }
+      });
+    }else{
+      if(Math.hypot(player.x-b.x, player.y-b.y)<0.6){ player.hp=Math.max(0,player.hp-1); SFX.hurt(); b.life=0; }
+    }
+  });
+  for(let i=bullets.length-1;i>=0;i--) if(bullets[i].life<=0) bullets.splice(i,1);
+}
+
+let last=performance.now();
+function tick(){
+  const t=performance.now(), dt=Math.min(60,t-last); last=t;
+  stepPlayer(dt);
+  ai(dt);
+  stepBullets(dt);
+  drawWorld(t,dt);
+  bars();
+
+  // death
+  if(player.hp<=0){
+    openPanel(`<h3 style="color:#ff9aa2">You fell in the dark</h3><p>Rooms cleared: ${level}-${subroom}</p>`,[
+      {label:'Retry', on:()=>{ level=1; subroom=1; coins=0; Object.assign(player,{x:ROOM_W/2,y:ROOM_H/2,hp:10,energy:100,state:'idle',dir:'down'}); mkRoom(); panel.style.display='none'; }}
+    ]);
+    return;
+  }
+  requestAnimationFrame(tick);
+}
+
+/* =========================
+   Start
+========================= */
+async function boot(){
+  await loadAll();
+  setAnimSets();
+  mkRoom();
+  requestAnimationFrame(tick);
+}
+window.addEventListener('load', boot);
+cv.addEventListener('pointerdown', function once(){ try{SFX.start();}catch{} cv.removeEventListener('pointerdown', once); }, {passive:true});
+</script>
+</body>
+</html>
