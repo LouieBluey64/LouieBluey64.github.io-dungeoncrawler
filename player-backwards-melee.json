@@ -2,7 +2,7 @@
   "meta": {
     "app": "Hand-authored",
     "version": "1.0",
-    "image": "player_melee_back.png",
+    "image": "player_melee_back.png.PNG",
     "format": "RGBA8888",
     "size": { "w": 128, "h": 32 },
     "scale": "1"
