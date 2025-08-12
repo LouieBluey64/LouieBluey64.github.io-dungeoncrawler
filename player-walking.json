@@ -6,7 +6,7 @@
     "walk_right": { "frame": { "x": 96,  "y": 0, "w": 32, "h": 32 } }
   },
   "meta": {
-    "image": "player_walk.png",
+    "image": "player_walk.png.PNG",
     "size": { "w": 128, "h": 32 },
     "scale": "1"
   }
