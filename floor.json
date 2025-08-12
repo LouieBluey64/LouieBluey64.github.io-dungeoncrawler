@@ -9,7 +9,7 @@
     }
   },
   "meta": {
-    "image": "floor_tile.png",
+    "image": "floor_tile.png.PNG",
     "size": { "w": 64, "h": 64 },
     "scale": "1"
   }
