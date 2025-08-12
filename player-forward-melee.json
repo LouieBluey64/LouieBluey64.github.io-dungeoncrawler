@@ -2,7 +2,7 @@
   "meta": {
     "app": "manual",
     "version": "1.0",
-    "image": "player_melee_front.png",
+    "image": "player_melee_front.png.PNG",
     "size": { "w": 128, "h": 32 },
     "scale": "1"
   },
