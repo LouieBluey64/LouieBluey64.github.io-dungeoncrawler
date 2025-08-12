@@ -1,6 +1,6 @@
 {
   "meta": {
-    "image": "player_dash_right.png",
+    "image": "player_dash_right.png.PNG",
     "size": { "w": 128, "h": 32 },
     "frameSize": { "w": 32, "h": 32 },
     "scale": 1
