@@ -32,7 +32,7 @@
   "meta": {
     "app": "Custom atlas",
     "version": "1.0",
-    "image": "player_slash_overhead.png",
+    "image": "player_slash_overhead.png.PNG",
     "format": "RGBA8888",
     "size": { "w": 128, "h": 32 },
     "scale": "1"
