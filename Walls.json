@@ -1,0 +1,14 @@
+{
+  "meta": {
+    "image": "walls_strip.png",
+    "tileSize": 32,
+    "gap": 4,
+    "outerMargin": 4,
+    "columns": 2,
+    "rows": 1
+  },
+  "frames": {
+    "wall_a": { "x": 4,  "y": 4, "w": 32, "h": 32 },
+    "wall_b": { "x": 40, "y": 4, "w": 32, "h": 32 }
+  }
+}
