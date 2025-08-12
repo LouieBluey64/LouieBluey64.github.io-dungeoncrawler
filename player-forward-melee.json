@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "app": "manual",
+    "version": "1.0",
+    "image": "player_melee_front.png",
+    "size": { "w": 128, "h": 32 },
+    "scale": "1"
+  },
+  "frames": {
+    "player_melee_front_0": { "x": 0,   "y": 0, "w": 32, "h": 32 },
+    "player_melee_front_1": { "x": 32,  "y": 0, "w": 32, "h": 32 },
+    "player_melee_front_2": { "x": 64,  "y": 0, "w": 32, "h": 32 },
+    "player_melee_front_3": { "x": 96,  "y": 0, "w": 32, "h": 32 }
+  },
+  "animations": {
+    "player_melee_front": [
+      "player_melee_front_0",
+      "player_melee_front_1",
+      "player_melee_front_2",
+      "player_melee_front_3"
+    ]
+  }
+}
